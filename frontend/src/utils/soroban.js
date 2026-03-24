@@ -18,8 +18,10 @@ import {
 
 const server = new rpc.Server(SOROBAN_RPC_URL);
 
-// Well-known funded testnet key — used only for read-only simulation
-const DUMMY_KEY = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN";
+// Stellar Friendbot account — 56-char valid StrKey, always funded on testnet.
+// Used ONLY as the transaction source for read-only simulation (never submitted).
+// Note: the previous key was 55 chars and failed Account's StrKey validation.
+const DUMMY_KEY = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
 function classifyError(err) {
   const msg = (err?.message || "").toLowerCase();
