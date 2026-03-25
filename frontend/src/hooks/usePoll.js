@@ -8,8 +8,25 @@ import {
 } from "../constants.js";
 
 export function usePoll(publicKey, signTransaction) {
-  const [results, setResults] = useState({ yes: 0, no: 0 });
-  const [loadingResults, setLoadingResults] = useState(true);
+  const CACHE_KEY = "poll_results";
+
+  // Seed state from cache immediately (avoids a flash of 0/0)
+  const [results, setResults] = useState(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      return cached ? JSON.parse(cached) : { yes: 0, no: 0 };
+    } catch {
+      return { yes: 0, no: 0 };
+    }
+  });
+  // If we already have cached data, don't show the skeleton on first paint
+  const [loadingResults, setLoadingResults] = useState(() => {
+    try {
+      return !localStorage.getItem("poll_results");
+    } catch {
+      return true;
+    }
+  });
   const [txStatus, setTxStatus] = useState(TX_STATUS.IDLE);
   const [txHash, setTxHash] = useState(null);
   const [txError, setTxError] = useState(null);
@@ -20,6 +37,10 @@ export function usePoll(publicKey, signTransaction) {
     try {
       const data = await fetchResults();
       setResults(data);
+      // Persist fresh data to localStorage cache
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      } catch { /* storage quota exceeded — ignore */ }
     } catch (err) {
       console.warn("Failed to fetch results:", err.message);
     } finally {

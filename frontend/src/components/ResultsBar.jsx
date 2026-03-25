@@ -6,6 +6,19 @@ export function ResultsBar({ yes, no, loading }) {
   const yesPct = total === 0 ? 50 : Math.round((yes / total) * 100);
   const noPct = total === 0 ? 50 : 100 - yesPct;
 
+  if (loading) {
+    return (
+      <div className="results">
+        <div className="results__header">
+          <div className="skeleton" style={{ width: "60px", height: "18px" }} />
+          <div className="skeleton" style={{ width: "60px", height: "18px" }} />
+        </div>
+        <div className="skeleton" style={{ height: "12px", borderRadius: "99px", marginTop: "10px" }} />
+        <div className="skeleton" style={{ width: "100px", height: "14px", margin: "8px auto 0" }} />
+      </div>
+    );
+  }
+
   return (
     <div className="results">
       <div className="results__header">
@@ -29,7 +42,7 @@ export function ResultsBar({ yes, no, loading }) {
         />
       </div>
       <p className="results__total">
-        {loading ? "Loading results…" : `${total} vote${total !== 1 ? "s" : ""} cast`}
+        {`${total} vote${total !== 1 ? "s" : ""} cast`}
       </p>
     </div>
   );
