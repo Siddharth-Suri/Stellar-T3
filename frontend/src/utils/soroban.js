@@ -26,6 +26,7 @@ const DUMMY_KEY = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 function classifyError(err) {
   const msg = (err?.message || "").toLowerCase();
   const codes = JSON.stringify(err?.response?.data || "").toLowerCase();
+  const code = err?.code;
 
   if (
     msg.includes("not found") ||
@@ -38,7 +39,9 @@ function classifyError(err) {
     msg.includes("reject") ||
     msg.includes("cancel") ||
     msg.includes("denied") ||
-    msg.includes("user")
+    msg.includes("closed the modal") ||
+    msg.includes("user declined") ||
+    code === -1
   ) {
     return ERROR_TYPES.USER_REJECTED;
   }
@@ -120,12 +123,26 @@ export async function castVote(option, publicKey, signTransaction) {
       networkPassphrase: NETWORK_PASSPHRASE,
     });
 
-    // 6. Reconstruct and submit
-    const signedTx = TransactionBuilder.fromXDR(
-      signed.signedTxXdr ?? signed,
-      NETWORK_PASSPHRASE
-    );
-    const sendResult = await server.sendTransaction(signedTx);
+    // 6. Send signed XDR directly to RPC — avoids TransactionBuilder.fromXDR()
+    //    which throws "Bad union switch: 4" on Soroban auth entries in sdk v13.
+    const signedXdr = signed.signedTxXdr ?? signed;
+    const rpcResponse = await fetch(SOROBAN_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "sendTransaction",
+        params: { transaction: signedXdr },
+      }),
+    });
+    const rpcJson = await rpcResponse.json();
+    if (rpcJson.error) {
+      const e = new Error(rpcJson.error.message || "RPC sendTransaction error");
+      e.response = { data: rpcJson.error };
+      throw e;
+    }
+    const sendResult = rpcJson.result;
 
     if (sendResult.status === "ERROR") {
       const e = new Error("Transaction error");
@@ -133,25 +150,40 @@ export async function castVote(option, publicKey, signTransaction) {
       throw e;
     }
 
-    // 7. Poll every 2 s until confirmed (up to 40 s)
+    // 7. Poll every 2 s until confirmed (up to 60 s)
+    //    Uses raw JSON-RPC to avoid SDK parsing the result XDR (same union bug).
     const hash = sendResult.hash;
     let status = "NOT_FOUND";
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 2000));
-      const txResult = await server.getTransaction(hash);
-      status = txResult.status;
+      const pollResp = await fetch(SOROBAN_RPC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method: "getTransaction",
+          params: { hash },
+        }),
+      });
+      const pollJson = await pollResp.json();
+      status = pollJson?.result?.status || "NOT_FOUND";
       if (status !== "NOT_FOUND") break;
     }
 
-    if (status === "SUCCESS") {
-      return { hash };
-    } else {
-      throw new Error("Transaction failed with status: " + status);
+    // Explicit FAILED = tx was included but execution was rejected
+    if (status === "FAILED") {
+      throw new Error("Transaction was rejected by the network.");
     }
+
+    // SUCCESS or still NOT_FOUND (pending / slow testnet indexing):
+    // the tx reached the mempool — return the hash so the user gets the explorer link.
+    return { hash };
   } catch (err) {
+    console.error("[castVote] raw error:", err, "| message:", err?.message, "| type:", err?.type);
     const errType = classifyError(err);
     const error = new Error(err.message);
-    error.type = errType;
+    error.type = err.type ?? errType; // preserve type if already set
     throw error;
   }
 }
