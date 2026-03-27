@@ -1,6 +1,10 @@
-# Live Poll — Stellar Testnet
+# Live Poll — Stellar Level 3
 
-A decentralised community poll running on **Soroban** smart contracts on the Stellar Testnet. Users connect their Stellar wallet, vote YES or NO on a governance question, and see live results updated every 5 seconds — all on-chain.
+A single-question on-chain poll built on **Soroban** smart contracts (Stellar Testnet).  
+Connect any Stellar wallet, vote Yes or No, and watch live results update every 5 seconds — all on-chain, with instant cached display.
+
+**Live Demo:** https://live-poll-stellar.vercel.app  
+**Demo Video:** https://your-video-link
 
 ---
 
@@ -8,93 +12,112 @@ A decentralised community poll running on **Soroban** smart contracts on the Ste
 
 - 🔗 **Wallet Connect** — Freighter, LOBSTR, and all StellarWalletsKit-supported wallets
 - ✅ **On-chain Voting** — Each vote is a real Soroban contract call
-- 📊 **Live Results** — Results refresh every 5 seconds via Soroban simulation
+- 📊 **Live Results** — Refresh every 5 seconds via Soroban simulation
+- ⚡ **Instant Load** — localStorage cache shown immediately on mount; fresh data fetched in background
+- 🦴 **Skeleton Loading** — Shimmer placeholders while initial results load
 - 🔴 **Error Handling** — Wallet not found, user cancelled, insufficient balance
 - 🔍 **TX Explorer** — Every successful vote links to Stellar Expert
 
-## Tech Stack
+## Stack
 
-| Layer     | Technology                        |
-|-----------|-----------------------------------|
-| Smart contract | Rust + Soroban SDK             |
-| Frontend  | React + Vite                      |
-| Wallet    | @creit.tech/stellar-wallets-kit   |
-| Stellar   | @stellar/stellar-sdk              |
-| Network   | Stellar Testnet (Soroban)         |
+| Layer | Technology |
+|-------|-----------|
+| Smart contract | Rust + Soroban SDK |
+| Frontend | React + Vite |
+| Wallet | @creit.tech/stellar-wallets-kit |
+| Stellar SDK | @stellar/stellar-sdk v13 |
+| Tests | Vitest + @testing-library/react |
+| Network | Stellar Testnet (Soroban) |
+
+---
+
+## Setup
+
+```bash
+cd frontend
+cp .env.example .env   # add your VITE_CONTRACT_ID
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+---
+
+## Tests
+
+```bash
+cd frontend
+npm test
+```
+
+**7 tests passing across 3 files:**
+
+```
+ ✓ src/tests/cache.test.js › localStorage cache › saves and retrieves poll results
+ ✓ src/tests/cache.test.js › localStorage cache › returns null when no cache exists
+ ✓ src/tests/cache.test.js › localStorage cache › overwrites stale cache with fresh data
+ ✓ src/tests/fetchResults.test.js › fetchResults › returns yes and no counts
+ ✓ src/tests/fetchResults.test.js › fetchResults › returns numeric values
+ ✓ src/tests/PollCard.test.jsx › PollCard › disables vote buttons when wallet not connected
+ ✓ src/tests/PollCard.test.jsx › PollCard › shows vote buttons when wallet is connected and not yet voted
+
+ Test Files  3 passed (3)
+      Tests  7 passed (7)
+   Duration  ~1s
+```
 
 ---
 
 ## Project Structure
 
 ```
-live-poll/
+T3 - Live Poll Advanced/
 ├── contract/
 │   ├── Cargo.toml
-│   └── src/lib.rs          ← Soroban smart contract
+│   └── src/lib.rs          ← Soroban smart contract (Rust)
 └── frontend/
-    ├── .env                ← Environment variables
+    ├── .env.example
     └── src/
         ├── constants.js
         ├── utils/soroban.js
         ├── hooks/useWallet.js
-        ├── hooks/usePoll.js
+        ├── hooks/usePoll.js        ← caching + loading states
         ├── components/WalletBar.jsx
         ├── components/PollCard.jsx
-        ├── components/ResultsBar.jsx
-        └── components/TxStatus.jsx
+        ├── components/ResultsBar.jsx  ← skeleton loading
+        ├── components/TxStatus.jsx
+        └── tests/
+            ├── setup.js
+            ├── fetchResults.test.js
+            ├── PollCard.test.jsx
+            └── cache.test.js
 ```
 
 ---
 
-## Setup
+## Contract
 
-### 1. Deploy the Smart Contract
+**Deployed on Stellar Testnet:** `CB3XLNVIJHJK7BF7UIZQ7QNCF3A7ADFAWZP5WMPHDPX23T5EJUXMT2VM`  
+**Explorer:** https://stellar.expert/explorer/testnet/contract/CB3XLNVIJHJK7BF7UIZQ7QNCF3A7ADFAWZP5WMPHDPX23T5EJUXMT2VM
 
-> Requires the [Stellar CLI](https://developers.stellar.org/docs/tools/stellar-cli) (`stellar`) and Rust with `wasm32-unknown-unknown` target.
+---
+
+## Deploying Your Own Contract
+
+> Requires the [Stellar CLI](https://developers.stellar.org/docs/tools/stellar-cli) and Rust with `wasm32-unknown-unknown` target.
 
 ```bash
-# Add WASM target (once)
 rustup target add wasm32-unknown-unknown
-
 cd contract
-
-# Build the WASM
 stellar contract build
-
-# Deploy to testnet (replace YOUR_SECRET_KEY)
 stellar contract deploy \
   --wasm target/wasm32-unknown-unknown/release/poll_contract.wasm \
   --source YOUR_SECRET_KEY \
   --network testnet
 ```
 
-The command will output a contract address like `CXXXX...`. Copy it.
-
-### 2. Configure the Frontend
-
-```bash
-cd ../frontend
-cp .env .env.local   # or edit .env directly
-```
-
-Edit `.env`:
-```env
-VITE_CONTRACT_ID=<paste contract address here>
-VITE_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-VITE_HORIZON_URL=https://horizon-testnet.stellar.org
-VITE_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
-VITE_POLL_QUESTION=Should Stellar adopt a universal basic income protocol?
-```
-
-### 3. Run the Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173).
+Copy the output contract address into `frontend/.env` as `VITE_CONTRACT_ID`.
 
 ---
 
@@ -108,30 +131,10 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ---
 
-## Deployed Contract
+## Commits
 
-> **Contract Address:** `<填入已部署合约地址>`  
-> Update this after deploying.
-
----
-
-## Error Handling
-
-| Error | Trigger | Message Shown |
-|-------|---------|---------------|
-| `WALLET_NOT_FOUND` | Extension not installed | "Wallet not found. Install Freighter or LOBSTR." |
-| `USER_REJECTED` | Modal closed / TX denied | "Cancelled." |
-| `INSUFFICIENT_BALANCE` | Not enough XLM for fees | "Not enough XLM. Get testnet funds from Friendbot." |
-
----
-
-## Screenshot
-
-> _Add a screenshot of the wallet connect modal here._
-
----
-
-## Sample Transaction
-
-> _Add a verifiable transaction hash after a successful vote._  
-> Explorer: `https://stellar.expert/explorer/testnet/tx/<hash>`
+1. `feat: deploy poll contract and scaffold React app`
+2. `feat: wallet connect + vote + live results`
+3. `feat: loading states + localStorage cache`
+4. `test: add vitest suite with 7 passing tests`
+5. `docs: complete README + vercel deploy`
