@@ -1,6 +1,6 @@
 // src/hooks/usePoll.js
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchResults, castVote } from "../utils/soroban.js";
+import { fetchResults, castVote, fetchVoters } from "../utils/soroban.js";
 import {
   TX_STATUS,
   ERROR_MESSAGES,
@@ -19,6 +19,16 @@ export function usePoll(publicKey, signTransaction) {
       return { yes: 0, no: 0 };
     }
   });
+  
+  const [voters, setVoters] = useState(() => {
+    try {
+      const cached = localStorage.getItem("poll_voters");
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  
   // If we already have cached data, don't show the skeleton on first paint
   const [loadingResults, setLoadingResults] = useState(() => {
     try {
@@ -35,11 +45,16 @@ export function usePoll(publicKey, signTransaction) {
 
   const loadResults = useCallback(async () => {
     try {
-      const data = await fetchResults();
+      const [data, votersData] = await Promise.all([
+        fetchResults(),
+        fetchVoters(),
+      ]);
       setResults(data);
+      setVoters(votersData);
       // Persist fresh data to localStorage cache
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        localStorage.setItem("poll_voters", JSON.stringify(votersData));
       } catch { /* storage quota exceeded — ignore */ }
     } catch (err) {
       console.warn("Failed to fetch results:", err.message);
@@ -89,6 +104,7 @@ export function usePoll(publicKey, signTransaction) {
 
   return {
     results,
+    voters,
     loadingResults,
     txStatus,
     txHash,

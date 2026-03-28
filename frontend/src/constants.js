@@ -29,6 +29,7 @@ export const ERROR_TYPES = {
   WALLET_NOT_FOUND: "WALLET_NOT_FOUND",
   USER_REJECTED: "USER_REJECTED",
   INSUFFICIENT_BALANCE: "INSUFFICIENT_BALANCE",
+  ALREADY_VOTED: "ALREADY_VOTED",
   UNKNOWN: "UNKNOWN",
 };
 
@@ -37,6 +38,7 @@ export const ERROR_MESSAGES = {
   USER_REJECTED: "Cancelled.",
   INSUFFICIENT_BALANCE:
     "Not enough XLM. Get testnet funds from Friendbot.",
+  ALREADY_VOTED: "You have already voted! One vote per account.",
   UNKNOWN: "Something went wrong. Please try again.",
 };
 

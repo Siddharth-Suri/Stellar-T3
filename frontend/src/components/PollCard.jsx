@@ -20,13 +20,7 @@ export function PollCard({
   const canVote = !!publicKey && !hasVoted && !isPending;
 
   return (
-    <main className="poll-card">
-      {/* Question */}
-      <section className="poll-card__question-section">
-        <p className="poll-card__eyebrow">Community Poll · Stellar Testnet</p>
-        <h1 className="poll-card__question">{POLL_QUESTION}</h1>
-      </section>
-
+    <main className="glass-card poll-card">
       {/* Results */}
       <section className="poll-card__results-section">
         <ResultsBar

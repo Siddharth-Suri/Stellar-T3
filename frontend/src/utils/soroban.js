@@ -52,6 +52,12 @@ function classifyError(err) {
   ) {
     return ERROR_TYPES.INSUFFICIENT_BALANCE;
   }
+  if (
+    msg.includes("already_voted") ||
+    codes.includes("already_voted")
+  ) {
+    return ERROR_TYPES.ALREADY_VOTED;
+  }
   return ERROR_TYPES.UNKNOWN;
 }
 
@@ -87,6 +93,48 @@ export async function fetchResults() {
   };
 }
 
+export async function fetchVoters() {
+  if (!CONTRACT_ID) return [];
+
+  const contract = new Contract(CONTRACT_ID);
+  const dummyAccount = new Account(DUMMY_KEY, "0");
+
+  const tx = new TransactionBuilder(dummyAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call("get_voters"))
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+
+  if (rpc.Api.isSimulationError(sim)) {
+    throw new Error("Simulation failed: " + sim.error);
+  }
+
+  const retval = sim.result?.retval;
+  if (!retval) return [];
+
+  const native = scValToNative(retval);
+  const voters = [];
+  if (native instanceof Map) {
+    native.forEach((value, key) => {
+      voters.push({ address: key, vote: value });
+    });
+  } else if (Array.isArray(native)) {
+    native.forEach((item) => {
+      if (Array.isArray(item)) voters.push({ address: item[0], vote: item[1] });
+    });
+  } else if (typeof native === "object") {
+    Object.entries(native).forEach(([key, value]) => {
+      voters.push({ address: key, vote: value });
+    });
+  }
+  // Reverse to simulate "latest first"
+  return voters.reverse();
+}
+
 export async function castVote(option, publicKey, signTransaction) {
   if (!CONTRACT_ID) throw new Error("Contract ID not set. Add VITE_CONTRACT_ID to .env");
   const contract = new Contract(CONTRACT_ID);
@@ -101,7 +149,11 @@ export async function castVote(option, publicKey, signTransaction) {
       networkPassphrase: NETWORK_PASSPHRASE,
     })
       .addOperation(
-        contract.call("vote", nativeToScVal(option, { type: "symbol" }))
+        contract.call(
+          "vote",
+          nativeToScVal(publicKey, { type: "address" }),
+          nativeToScVal(option, { type: "symbol" })
+        )
       )
       .setTimeout(30)
       .build();

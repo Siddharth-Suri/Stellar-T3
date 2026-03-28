@@ -1,8 +1,9 @@
 // src/components/WalletBar.jsx
 import React from "react";
+import { ThemeSwitcher } from "./ThemeSwitcher.jsx";
 import { FRIENDBOT_URL } from "../constants.js";
 
-export function WalletBar({ publicKey, connecting, walletError, onConnect, onDisconnect }) {
+export function WalletBar({ publicKey, connecting, walletError, onConnect, onDisconnect, theme, toggleTheme }) {
   const truncate = (key) =>
     key ? `${key.slice(0, 6)}…${key.slice(-4)}` : "";
 
@@ -15,6 +16,7 @@ export function WalletBar({ publicKey, connecting, walletError, onConnect, onDis
       </div>
 
       <div className="wallet-bar__actions">
+        <ThemeSwitcher theme={theme} toggleTheme={toggleTheme} />
         {publicKey ? (
           <div className="wallet-bar__connected">
             <span className="wallet-bar__address" title={publicKey}>
