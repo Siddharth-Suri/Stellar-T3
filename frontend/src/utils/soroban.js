@@ -20,7 +20,6 @@ const server = new rpc.Server(SOROBAN_RPC_URL);
 
 // Stellar Friendbot account — 56-char valid StrKey, always funded on testnet.
 // Used ONLY as the transaction source for read-only simulation (never submitted).
-// Note: the previous key was 55 chars and failed Account's StrKey validation.
 const DUMMY_KEY = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
 function classifyError(err) {
@@ -28,11 +27,7 @@ function classifyError(err) {
   const codes = JSON.stringify(err?.response?.data || "").toLowerCase();
   const code = err?.code;
 
-  if (
-    msg.includes("not found") ||
-    msg.includes("install") ||
-    msg.includes("extension")
-  ) {
+  if (msg.includes("not found") || msg.includes("install") || msg.includes("extension")) {
     return ERROR_TYPES.WALLET_NOT_FOUND;
   }
   if (
@@ -52,113 +47,33 @@ function classifyError(err) {
   ) {
     return ERROR_TYPES.INSUFFICIENT_BALANCE;
   }
-  if (
-    msg.includes("already_voted") ||
-    codes.includes("already_voted")
-  ) {
+  if (msg.includes("already_voted") || codes.includes("already_voted")) {
     return ERROR_TYPES.ALREADY_VOTED;
+  }
+  if (msg.includes("poll_closed") || codes.includes("poll_closed")) {
+    return { ...ERROR_TYPES.UNKNOWN, message: "This poll is closed." };
+  }
+  if (msg.includes("not_creator") || codes.includes("not_creator")) {
+    return { ...ERROR_TYPES.UNKNOWN, message: "Only the creator can close this poll." };
   }
   return ERROR_TYPES.UNKNOWN;
 }
 
-export async function fetchResults() {
-  // Silently return zeros when no contract is configured
-  if (!CONTRACT_ID) return { yes: 0, no: 0 };
-
-  const contract = new Contract(CONTRACT_ID);
-  const dummyAccount = new Account(DUMMY_KEY, "0");
-
-  const tx = new TransactionBuilder(dummyAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(contract.call("get_results"))
-    .setTimeout(30)
-    .build();
-
-  const sim = await server.simulateTransaction(tx);
-
-  if (rpc.Api.isSimulationError(sim)) {
-    throw new Error("Simulation failed: " + sim.error);
-  }
-
-  const retval = sim.result?.retval;
-  if (!retval) throw new Error("No return value from simulation.");
-
-  const native = scValToNative(retval);
-  // Contract returns (u32, u32) — may be BigInt in v13
-  return {
-    yes: Number(native[0]),
-    no: Number(native[1]),
-  };
-}
-
-export async function fetchVoters() {
-  if (!CONTRACT_ID) return [];
-
-  const contract = new Contract(CONTRACT_ID);
-  const dummyAccount = new Account(DUMMY_KEY, "0");
-
-  const tx = new TransactionBuilder(dummyAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-    .addOperation(contract.call("get_voters"))
-    .setTimeout(30)
-    .build();
-
-  const sim = await server.simulateTransaction(tx);
-
-  if (rpc.Api.isSimulationError(sim)) {
-    throw new Error("Simulation failed: " + sim.error);
-  }
-
-  const retval = sim.result?.retval;
-  if (!retval) return [];
-
-  const native = scValToNative(retval);
-  const voters = [];
-  if (native instanceof Map) {
-    native.forEach((value, key) => {
-      voters.push({ address: key, vote: value });
-    });
-  } else if (Array.isArray(native)) {
-    native.forEach((item) => {
-      if (Array.isArray(item)) voters.push({ address: item[0], vote: item[1] });
-    });
-  } else if (typeof native === "object") {
-    Object.entries(native).forEach(([key, value]) => {
-      voters.push({ address: key, vote: value });
-    });
-  }
-  // Reverse to simulate "latest first"
-  return voters.reverse();
-}
-
-export async function castVote(option, publicKey, signTransaction) {
+/** Generic transaction submitter for all modifier calls */
+async function submitTransaction(operation, publicKey, signTransaction) {
   if (!CONTRACT_ID) throw new Error("Contract ID not set. Add VITE_CONTRACT_ID to .env");
-  const contract = new Contract(CONTRACT_ID);
-
+  
   try {
-    // 1. Load voter's account from RPC
     const account = await server.getAccount(publicKey);
 
-    // 2. Build the transaction
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
       networkPassphrase: NETWORK_PASSPHRASE,
     })
-      .addOperation(
-        contract.call(
-          "vote",
-          nativeToScVal(publicKey, { type: "address" }),
-          nativeToScVal(option, { type: "symbol" })
-        )
-      )
+      .addOperation(operation)
       .setTimeout(30)
       .build();
 
-    // 3. Simulate to get auth + footprint (required by Soroban)
     const simResult = await server.simulateTransaction(tx);
     if (rpc.Api.isSimulationError(simResult)) {
       const simErr = new Error("Simulation error: " + simResult.error);
@@ -166,17 +81,13 @@ export async function castVote(option, publicKey, signTransaction) {
       throw simErr;
     }
 
-    // 4. Assemble authorised tx and export XDR
     const assembled = rpc.assembleTransaction(tx, simResult).build().toXDR();
 
-    // 5. Sign via the wallet
     const signed = await signTransaction(assembled, {
       address: publicKey,
       networkPassphrase: NETWORK_PASSPHRASE,
     });
 
-    // 6. Send signed XDR directly to RPC — avoids TransactionBuilder.fromXDR()
-    //    which throws "Bad union switch: 4" on Soroban auth entries in sdk v13.
     const signedXdr = signed.signedTxXdr ?? signed;
     const rpcResponse = await fetch(SOROBAN_RPC_URL, {
       method: "POST",
@@ -188,6 +99,7 @@ export async function castVote(option, publicKey, signTransaction) {
         params: { transaction: signedXdr },
       }),
     });
+    
     const rpcJson = await rpcResponse.json();
     if (rpcJson.error) {
       const e = new Error(rpcJson.error.message || "RPC sendTransaction error");
@@ -202,40 +114,106 @@ export async function castVote(option, publicKey, signTransaction) {
       throw e;
     }
 
-    // 7. Poll every 2 s until confirmed (up to 60 s)
-    //    Uses raw JSON-RPC to avoid SDK parsing the result XDR (same union bug).
     const hash = sendResult.hash;
     let status = "NOT_FOUND";
     for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const pollResp = await fetch(SOROBAN_RPC_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: Date.now(),
-          method: "getTransaction",
-          params: { hash },
-        }),
-      });
-      const pollJson = await pollResp.json();
-      status = pollJson?.result?.status || "NOT_FOUND";
-      if (status !== "NOT_FOUND") break;
+       await new Promise((r) => setTimeout(r, 2000));
+       const pollResp = await fetch(SOROBAN_RPC_URL, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           jsonrpc: "2.0",
+           id: Date.now(),
+           method: "getTransaction",
+           params: { hash },
+         }),
+       });
+       const pollJson = await pollResp.json();
+       status = pollJson?.result?.status || "NOT_FOUND";
+       if (status !== "NOT_FOUND") break;
     }
 
-    // Explicit FAILED = tx was included but execution was rejected
     if (status === "FAILED") {
       throw new Error("Transaction was rejected by the network.");
     }
 
-    // SUCCESS or still NOT_FOUND (pending / slow testnet indexing):
-    // the tx reached the mempool — return the hash so the user gets the explorer link.
     return { hash };
   } catch (err) {
-    console.error("[castVote] raw error:", err, "| message:", err?.message, "| type:", err?.type);
+    console.error("[submitTransaction] raw error:", err);
     const errType = classifyError(err);
-    const error = new Error(err.message);
-    error.type = err.type ?? errType; // preserve type if already set
+    const error = new Error(errType.message || err.message);
+    error.type = err.type ?? errType;
     throw error;
   }
+}
+
+export async function fetchPolls() {
+  if (!CONTRACT_ID) return [];
+
+  const contract = new Contract(CONTRACT_ID);
+  const dummyAccount = new Account(DUMMY_KEY, "0");
+
+  const tx = new TransactionBuilder(dummyAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call("get_polls"))
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (rpc.Api.isSimulationError(sim)) {
+    throw new Error("Simulation failed: " + sim.error);
+  }
+
+  const retval = sim.result?.retval;
+  if (!retval) return [];
+
+  const native = scValToNative(retval);
+  const rawPolls = native instanceof Map ? Object.fromEntries(native) : native;
+  
+  if (typeof rawPolls !== "object") return [];
+
+  const polls = Object.entries(rawPolls).map(([id, poll]) => ({
+    id: Number(id),
+    question: poll.question,
+    yes: Number(poll.yes),
+    no: Number(poll.no),
+    creator: poll.creator,
+    closed: poll.closed,
+  }));
+
+  // Sort newest first
+  return polls.sort((a, b) => b.id - a.id);
+}
+
+export async function castVote(pollId, option, publicKey, signTransaction) {
+  const contract = new Contract(CONTRACT_ID);
+  const call = contract.call(
+    "vote",
+    nativeToScVal(publicKey, { type: "address" }),
+    nativeToScVal(pollId, { type: "u32" }),
+    nativeToScVal(option, { type: "symbol" })
+  );
+  return submitTransaction(call, publicKey, signTransaction);
+}
+
+export async function createPoll(publicKey, question, signTransaction) {
+  const contract = new Contract(CONTRACT_ID);
+  const call = contract.call(
+    "create_poll",
+    nativeToScVal(publicKey, { type: "address" }),
+    nativeToScVal(question, { type: "string" })
+  );
+  return submitTransaction(call, publicKey, signTransaction);
+}
+
+export async function closePoll(publicKey, pollId, signTransaction) {
+  const contract = new Contract(CONTRACT_ID);
+  const call = contract.call(
+    "close_poll",
+    nativeToScVal(publicKey, { type: "address" }),
+    nativeToScVal(pollId, { type: "u32" })
+  );
+  return submitTransaction(call, publicKey, signTransaction);
 }
