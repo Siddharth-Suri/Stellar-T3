@@ -1,6 +1,6 @@
 # Live Poll — Stellar Level 3
 
-![App UI](./assets/Screenshot%202026-03-29%20at%206.09.28%E2%80%AFPM.png)
+![App UI](./assets/app-ui.png)
 
 A single question on-chain poll built on **Soroban** smart contracts (Stellar Testnet).  
 Connect any Stellar wallet, vote Yes or No, and watch live results update every 5 seconds all on chain, with instant cached display.
@@ -55,7 +55,7 @@ npm test
 
 **7 tests passing across 3 files:**
 
-![Test Output](./assets/Screenshot%202026-03-29%20at%206.11.44%E2%80%AFPM.png)
+![Test Output](./assets/test-output.png)
 
 ```
  ✓ src/tests/cache.test.js › localStorage cache › saves and retrieves poll results
