@@ -2,10 +2,10 @@
 
 ![App UI](./assets/Screenshot%202026-03-29%20at%206.09.28%E2%80%AFPM.png)
 
-A single-question on-chain poll built on **Soroban** smart contracts (Stellar Testnet).  
-Connect any Stellar wallet, vote Yes or No, and watch live results update every 5 seconds — all on-chain, with instant cached display.
+A single question on-chain poll built on **Soroban** smart contracts (Stellar Testnet).  
+Connect any Stellar wallet, vote Yes or No, and watch live results update every 5 seconds all on chain, with instant cached display.
 
-**Live Demo:** https://live-poll-stellar.vercel.app  
+**Live Demo:** https://live-poll-t3.vercel.app/  
 **Demo Video:** https://your-video-link
 
 ---
