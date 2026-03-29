@@ -6,7 +6,7 @@ A single question on-chain poll built on **Soroban** smart contracts (Stellar Te
 Connect any Stellar wallet, vote Yes or No, and watch live results update every 5 seconds all on chain, with instant cached display.
 
 **Live Demo:** https://live-poll-t3.vercel.app/  
-**Demo Video:** [assets/demo-video.mov](./assets/demo-video.mov)
+**Demo Video:** https://drive.google.com/file/d/1WHiRyIe6Z5AsiNmBBOtoiLF2GQHrz9fD/view?usp=sharing
 
 ---
 
