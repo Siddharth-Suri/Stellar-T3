@@ -142,3 +142,17 @@ Copy the output contract address into `frontend/.env` as `VITE_CONTRACT_ID`.
 3. `feat: loading states + localStorage cache`
 4. `test: add vitest suite with 7 passing tests`
 5. `docs: complete README + vercel deploy`
+
+---
+
+## Gallery
+
+Here are the remaining screenshots outlining the app flow and test functionality:
+
+![Screenshot 2](./assets/screenshot-2.png)
+![Screenshot 3](./assets/screenshot-3.png)
+![Screenshot 4](./assets/screenshot-4.png)
+![Screenshot 5](./assets/screenshot-5.png)
+![Screenshot 6](./assets/screenshot-6.png)
+![Screenshot 7](./assets/screenshot-7.png)
+![Screenshot 8](./assets/screenshot-8.png)
